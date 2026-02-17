@@ -1,3 +1,8 @@
+<img width="1364" height="689" alt="image" src="https://github.com/user-attachments/assets/0544d213-c0a9-4c0f-9c7e-024823e8101c" />
+
+
+
+
 ## Gemini 3 Flash AI Trading Platform - Walkthrough
 
 This guide explains how to run and use the autonomous AI trading platform powered by Gemini 3 Flash.
