@@ -123,16 +123,12 @@ Analyze the market and make your trading decision now."""
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_PROMPT,
                     temperature=0.3,
-                    max_output_tokens=1024,
+                    max_output_tokens=8192,
+                    response_mime_type="application/json",
                 )
             )
 
             response_text = response.text.strip()
-            # Clean up potential markdown wrapping
-            if response_text.startswith("```"):
-                lines = response_text.split("\n")
-                response_text = "\n".join(lines[1:-1])
-
             decision = json.loads(response_text)
 
             # Validate required fields
