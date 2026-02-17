@@ -1,182 +1,241 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 
 export default function CandlestickChart({ data, tick }) {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
 
-    const candleWidth = 10;
-    const candleSpacing = 2;
+    // Viewport state: Offset from the RIGHT (0 means latest candle is at edge)
+    // Scale: Pixels per candle (width + gap)
+    const [viewport, setViewport] = useState({ offset: 0, scale: 10 });
+    const [isDragging, setIsDragging] = useState(false);
+    const lastMouseX = useRef(0);
+
     const colors = {
         bg: '#080b14',
         grid: '#1e2329',
         text: '#8b949e',
         up: '#26a641',
         down: '#da3633',
-        upBright: '#3fb950',
-        downBright: '#f85149',
         crosshair: '#f0b429',
     };
 
+    // Handle Resize
     useEffect(() => {
+        const handleResize = () => draw();
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // Main Draw Function
+    const draw = useCallback(() => {
         const canvas = canvasRef.current;
         const container = containerRef.current;
+        if (!canvas || !container || !data) return;
 
-        if (!canvas || !container || !Array.isArray(data) || data.length === 0) return;
+        const rect = container.getBoundingClientRect();
+        const width = rect.width;
+        const height = rect.height;
+
+        // Handle Retina displays
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = width * dpr;
+        canvas.height = height * dpr;
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
 
         const ctx = canvas.getContext('2d');
-        let animFrame;
+        ctx.scale(dpr, dpr);
 
-        const draw = () => {
-            const rect = container.getBoundingClientRect();
-            const width = rect.width;
-            const height = rect.height;
+        // Clear background
+        ctx.fillStyle = colors.bg;
+        ctx.fillRect(0, 0, width, height);
 
-            if (width === 0 || height === 0) return;
+        if (data.length === 0) return;
 
-            const dpr = window.devicePixelRatio || 1;
-            canvas.width = width * dpr;
-            canvas.height = height * dpr;
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const { offset, scale } = viewport;
+        const candleWidth = scale * 0.7; // 70% body, 30% gap
+        const rightMargin = 80; // Space for price scale
+        const chartWidth = width - rightMargin;
 
-            ctx.clearRect(0, 0, width, height);
-            ctx.fillStyle = colors.bg;
-            ctx.fillRect(0, 0, width, height);
+        // Calculate visible range
+        // Visible candles = chartWidth / scale
+        const visibleCount = Math.ceil(chartWidth / scale);
 
-            const visibleCandlesCount = Math.floor(width / (candleWidth + candleSpacing));
-            const startIndex = Math.max(0, data.length - visibleCandlesCount);
-            const visibleData = data.slice(startIndex);
+        // Index of the rightmost candle to show
+        // If offset is 0, we show data[len-1] at the right edge
+        const rightIndex = data.length - 1 - Math.floor(offset / scale);
+        const leftIndex = Math.max(0, rightIndex - visibleCount - 1);
 
-            if (visibleData.length === 0) return;
+        // Subset for rendering
+        const visibleData = data.slice(leftIndex, rightIndex + 1);
 
-            let minPrice = Infinity;
-            let maxPrice = -Infinity;
-            visibleData.forEach(c => {
-                if (c.low < minPrice) minPrice = c.low;
-                if (c.high > maxPrice) maxPrice = c.high;
-            });
+        if (visibleData.length === 0) return;
 
-            const priceRange = maxPrice - minPrice;
-            if (priceRange === 0) {
-                minPrice -= 1;
-                maxPrice += 1;
-            } else {
-                minPrice -= priceRange * 0.1;
-                maxPrice += priceRange * 0.1;
-            }
+        // Calculate Y-axis range (Min/Max Price)
+        let minPrice = Infinity;
+        let maxPrice = -Infinity;
+        visibleData.forEach(c => {
+            if (c.low < minPrice) minPrice = c.low;
+            if (c.high > maxPrice) maxPrice = c.high;
+        });
 
-            const chartPadR = 70;
-            const chartW = width - chartPadR;
+        // Add padding to price range
+        const padding = (maxPrice - minPrice) * 0.1 || 1.0;
+        minPrice -= padding;
+        maxPrice += padding;
+        const priceRange = maxPrice - minPrice;
 
-            const getY = (price) => height - ((price - minPrice) / (maxPrice - minPrice)) * height;
-            const getX = (index) => index * (candleWidth + candleSpacing) + (candleWidth / 2);
+        // Helper: Price to Y coordinate
+        const getY = (price) => height - ((price - minPrice) / priceRange) * height;
 
-            // Grid
-            ctx.strokeStyle = colors.grid;
-            ctx.lineWidth = 0.5;
+        // Helper: Index to X coordinate
+        // We render from right to left conceptually
+        // X = chartWidth - ( (total_data_index - right_index_offset) * scale )
+        // Simply: x position relative to the right edge of the chart area
+        const getX = (index) => {
+            const posFromRight = (data.length - 1 - index) * scale + (offset % scale);
+            return chartWidth - posFromRight - (scale / 2);
+        };
+
+        // Draw Grid & Price Labels
+        ctx.strokeStyle = colors.grid;
+        ctx.lineWidth = 0.5;
+        ctx.fillStyle = colors.text;
+        ctx.font = '11px monospace';
+        ctx.textAlign = 'left';
+
+        // Vertical Price Grid
+        const gridLines = 8;
+        for (let i = 0; i <= gridLines; i++) {
+            const y = (height / gridLines) * i;
+            const price = maxPrice - (i / gridLines) * priceRange;
+
             ctx.beginPath();
-            for (let i = 1; i < 10; i++) {
-                const y = (height / 10) * i;
-                ctx.moveTo(0, y);
-                ctx.lineTo(chartW, y);
-            }
+            ctx.moveTo(0, y);
+            ctx.lineTo(chartWidth, y);
             ctx.stroke();
 
-            // Price labels on right axis
-            ctx.font = '10px "JetBrains Mono", monospace';
-            ctx.fillStyle = colors.text;
-            ctx.textAlign = 'left';
-            for (let i = 1; i < 10; i++) {
-                const y = (height / 10) * i;
-                const price = maxPrice - ((maxPrice - minPrice) / 10) * i;
-                ctx.fillText(price.toFixed(2), chartW + 8, y + 3);
-            }
+            ctx.fillText(price.toFixed(2), chartWidth + 5, y + 4);
+        }
 
-            // Candles
-            visibleData.forEach((candle, i) => {
-                const x = getX(i);
-                if (x > chartW) return;
+        // Horizontal Time Grid (simplified)
+        // ... (could add time labels here)
 
-                const yOpen = getY(candle.open);
-                const yClose = getY(candle.close);
-                const yHigh = getY(candle.high);
-                const yLow = getY(candle.low);
+        // Draw Candles
+        visibleData.forEach((candle, i) => {
+            const originalIndex = leftIndex + i;
+            const x = getX(originalIndex);
 
-                const isUp = candle.close >= candle.open;
-                const color = isUp ? colors.up : colors.down;
+            const yOpen = getY(candle.open);
+            const yClose = getY(candle.close);
+            const yHigh = getY(candle.high);
+            const yLow = getY(candle.low);
 
-                // Wick
-                ctx.strokeStyle = color;
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(x, yHigh);
-                ctx.lineTo(x, yLow);
-                ctx.stroke();
+            const isUp = candle.close >= candle.open;
+            const color = isUp ? colors.up : colors.down;
 
-                // Body
-                ctx.fillStyle = color;
-                const bodyHeight = Math.max(Math.abs(yClose - yOpen), 1);
-                ctx.fillRect(x - candleWidth / 2, Math.min(yOpen, yClose), candleWidth, bodyHeight);
+            ctx.fillStyle = color;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1;
 
-                // Volume
-                const volumes = visibleData.map(c => c.volume);
-                const maxVol = Math.max(...volumes) || 1;
-                const volHeight = (candle.volume / maxVol) * (height * 0.12);
-                ctx.fillStyle = isUp ? 'rgba(38, 166, 65, 0.15)' : 'rgba(218, 54, 33, 0.15)';
-                ctx.fillRect(x - candleWidth / 2, height - volHeight, candleWidth, volHeight);
-            });
+            // Wick
+            ctx.beginPath();
+            ctx.moveTo(x, yHigh);
+            ctx.lineTo(x, yLow);
+            ctx.stroke();
 
-            // Current Price Line
-            if (tick && tick.bid) {
-                const yTick = getY(tick.bid);
-                if (yTick >= 0 && yTick <= height) {
-                    ctx.strokeStyle = colors.crosshair;
-                    ctx.lineWidth = 1;
-                    ctx.setLineDash([4, 4]);
-                    ctx.beginPath();
-                    ctx.moveTo(0, yTick);
-                    ctx.lineTo(chartW, yTick);
-                    ctx.stroke();
-                    ctx.setLineDash([]);
-
-                    // Price label
-                    ctx.fillStyle = colors.crosshair;
-                    const labelW = 65;
-                    ctx.fillRect(chartW, yTick - 10, labelW, 20);
-                    ctx.fillStyle = '#000';
-                    ctx.font = 'bold 10px "JetBrains Mono", monospace';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(tick.bid.toFixed(2), chartW + labelW / 2, yTick + 4);
-                    ctx.textAlign = 'left';
-                }
-            }
-        };
-
-        const resizeObserver = new ResizeObserver(() => {
-            cancelAnimationFrame(animFrame);
-            animFrame = requestAnimationFrame(draw);
+            // Body
+            const bodyH = Math.max(Math.abs(yClose - yOpen), 1);
+            ctx.fillRect(x - candleWidth / 2, Math.min(yOpen, yClose), candleWidth, bodyH);
         });
-        resizeObserver.observe(container);
 
+        // Draw Current Price Line (Bid)
+        if (tick && tick.bid) {
+            const yBid = getY(tick.bid);
+            if (yBid >= 0 && yBid <= height) {
+                ctx.strokeStyle = colors.crosshair;
+                ctx.setLineDash([4, 4]);
+                ctx.beginPath();
+                ctx.moveTo(0, yBid);
+                ctx.lineTo(chartWidth, yBid);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Label
+                ctx.fillStyle = colors.crosshair;
+                ctx.fillRect(chartWidth, yBid - 10, 60, 20);
+                ctx.fillStyle = '#000';
+                ctx.fillText(tick.bid.toFixed(2), chartWidth + 5, yBid + 4);
+            }
+        }
+    }, [data, tick, viewport, colors]);
+
+    // Redraw when dependencies change
+    useEffect(() => {
         draw();
+    }, [draw]);
 
-        return () => {
-            resizeObserver.disconnect();
-            cancelAnimationFrame(animFrame);
-        };
-    }, [data, tick]);
+    // Interaction Handlers
+    const handleMouseDown = (e) => {
+        setIsDragging(true);
+        lastMouseX.current = e.clientX;
+    };
+
+    const handleMouseMove = (e) => {
+        if (!isDragging) return;
+        const deltaX = e.clientX - lastMouseX.current;
+        lastMouseX.current = e.clientX;
+
+        setViewport(prev => ({
+            ...prev,
+            offset: prev.offset - deltaX // Dragging right moves view left (history)
+        }));
+    };
+
+    const handleMouseUp = () => {
+        setIsDragging(false);
+    };
+
+    const handleWheel = (e) => {
+        e.preventDefault();
+        const zoomSensitivity = 0.001;
+        setViewport(prev => {
+            const newScale = Math.max(2, Math.min(50, prev.scale * (1 - e.deltaY * zoomSensitivity)));
+            return { ...prev, scale: newScale };
+        });
+    };
 
     return (
-        <div ref={containerRef} className="chart-container">
-            <canvas ref={canvasRef} />
-            {/* OHLC Overlay */}
-            {Array.isArray(data) && data.length > 0 && (
-                <div className="chart-ohlc-overlay">
-                    <span>O: <span className="chart-ohlc-value">{data[data.length - 1].open.toFixed(2)}</span></span>
-                    <span>H: <span className="chart-ohlc-value">{data[data.length - 1].high.toFixed(2)}</span></span>
-                    <span>L: <span className="chart-ohlc-value">{data[data.length - 1].low.toFixed(2)}</span></span>
-                    <span>C: <span className={`chart-ohlc-value font-bold ${data[data.length - 1].close >= data[data.length - 1].open ? 'color-green' : 'color-red'}`}>
-                        {data[data.length - 1].close.toFixed(2)}
-                    </span></span>
+        <div
+            ref={containerRef}
+            className="chart-container"
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onWheel={handleWheel}
+            style={{
+                cursor: isDragging ? 'grabbing' : 'grab',
+                touchAction: 'none',
+                width: '100%',
+                height: '100%',
+                position: 'relative'
+            }}
+        >
+            <canvas ref={canvasRef} style={{ display: 'block' }} />
+
+            {/* Simple OHLC overlay */}
+            {data && data.length > 0 && (
+                <div style={{
+                    position: 'absolute',
+                    top: 10,
+                    left: 10,
+                    color: '#8b949e',
+                    fontFamily: 'monospace',
+                    fontSize: '12px',
+                    pointerEvents: 'none'
+                }}>
+                    Last: O:{data[data.length - 1].open.toFixed(2)} H:{data[data.length - 1].high.toFixed(2)} L:{data[data.length - 1].low.toFixed(2)} C:{data[data.length - 1].close.toFixed(2)}
                 </div>
             )}
         </div>

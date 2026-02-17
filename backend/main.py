@@ -42,7 +42,10 @@ async def lifespan(app: FastAPI):
     # 1. Connect to MT5
     result = mt5_bridge.initialize()
     if not result["success"]:
-        print(f"[Main] WARNING: {result['message']}")
+        print(f"[Main] SEVERE: {result['message']}")
+        # In strict mode, we should ideally stop here
+        if os.getenv("FORCE_MT5_DATA", "false").lower() == "true":
+            raise RuntimeError(f"STRICT MODE: Failed to connect to MT5. {result['message']}")
     else:
         print(f"[Main] {result['message']}")
 

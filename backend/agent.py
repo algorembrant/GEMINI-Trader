@@ -82,7 +82,13 @@ class TradingAgent:
         Returns: { action, reasoning, confidence, sl, tp, volume }
         """
         if not self.client:
-            return self._mock_decision(candles, tick, positions)
+            # In strict usage, we simply return DO_NOTHING if no AI is available
+            return {
+                "action": "DO_NOTHING",
+                "reasoning": "Gemini API client not initialized (check keys)",
+                "confidence": 0.0,
+                "sl": None, "tp": None, "volume": None
+            }
 
         # Build the market context prompt
         recent_candles = candles[-20:] if len(candles) > 20 else candles
@@ -163,37 +169,7 @@ Analyze the market and make your trading decision now."""
                 "sl": None, "tp": None, "volume": None
             }
 
-    def _mock_decision(self, candles: list, tick: dict, positions: list) -> dict:
-        """Generate a mock decision for testing without Gemini API."""
-        import random
-
-        if positions:
-            actions = ["HOLD", "HOLD", "HOLD", "CLOSE", "DO_NOTHING"]
-        else:
-            actions = ["BUY", "SELL", "DO_NOTHING", "DO_NOTHING", "DO_NOTHING"]
-
-        action = random.choice(actions)
-        bid = tick.get("bid", 2650.0)
-
-        reasoning_map = {
-            "BUY": f"[MOCK] Bullish signal detected. Price at {bid}, showing upward momentum. Entry with tight SL.",
-            "SELL": f"[MOCK] Bearish pattern forming at {bid}. Resistance rejection, expecting pullback.",
-            "HOLD": f"[MOCK] Position still valid. Price at {bid}, holding with current SL/TP.",
-            "CLOSE": f"[MOCK] Taking profit at {bid}. Target reached, securing gains.",
-            "DO_NOTHING": f"[MOCK] No clear setup at {bid}. Market is choppy, waiting for confirmation.",
-        }
-
-        sl = round(bid - 5.0, 2) if action == "BUY" else round(bid + 5.0, 2) if action == "SELL" else None
-        tp = round(bid + 8.0, 2) if action == "BUY" else round(bid - 8.0, 2) if action == "SELL" else None
-
-        return {
-            "action": action,
-            "reasoning": reasoning_map.get(action, "Mock mode active."),
-            "confidence": round(random.uniform(0.4, 0.95), 2),
-            "sl": sl,
-            "tp": tp,
-            "volume": float(os.getenv("DEFAULT_VOLUME", "0.01")),
-        }
+    # Mock decision method removed for production/strict mode safety
 
     def _format_candles(self, candles: list) -> str:
         """Format candle data as a readable table."""

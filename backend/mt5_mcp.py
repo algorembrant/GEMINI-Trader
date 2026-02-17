@@ -20,6 +20,8 @@ try:
     MT5_AVAILABLE = True
 except ImportError:
     MT5_AVAILABLE = False
+    if os.getenv("FORCE_MT5_DATA", "false").lower() == "true":
+        raise ImportError("CRITICAL: MetaTrader5 package not found and FORCE_MT5_DATA=true")
     print("[MT5] MetaTrader5 package not available — running in SIMULATION mode")
 
 try:
@@ -53,6 +55,11 @@ class MT5Bridge:
     def initialize(self) -> dict:
         """Connect to the MT5 terminal."""
         if self.simulation_mode:
+            if os.getenv("FORCE_MT5_DATA", "false").lower() == "true":
+                return {
+                    "success": False,
+                    "message": "CRITICAL: MT5 not available but FORCE_MT5_DATA is true. Exiting."
+                }
             self.connected = True
             return {
                 "success": True,
@@ -70,7 +77,10 @@ class MT5Bridge:
             init_kwargs["path"] = mt5_path
 
         if not mt5.initialize(**init_kwargs):
-            return {"success": False, "message": f"MT5 init failed: {mt5.last_error()}"}
+            err_code = mt5.last_error()
+            if os.getenv("FORCE_MT5_DATA", "false").lower() == "true":
+                return {"success": False, "message": f"CRITICAL: MT5 init failed: {err_code}"}
+            return {"success": False, "message": f"MT5 init failed: {err_code}"}
 
         if login and password and server:
             authorized = mt5.login(login=login, password=password, server=server)
@@ -216,6 +226,9 @@ class MT5Bridge:
         symbol = symbol or self.symbol
 
         if self.simulation_mode:
+            if os.getenv("FORCE_MT5_DATA", "false").lower() == "true":
+                return {"success": False, "message": "Cannot place mock order in STRICT MT5 mode."}
+
             tick = self.get_tick(symbol)
             price = tick["ask"] if action.lower() == "buy" else tick["bid"]
             self._sim_ticket_counter += 1
