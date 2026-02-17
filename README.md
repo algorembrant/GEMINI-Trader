@@ -28,13 +28,11 @@ Open a terminal in `backend/` and run:
 ```bash
 # Activate venv if needed
 .venv\Scripts\activate
-# Start the server
-python -m uvicorn main:app --reload --port 8000 --host 0.0.0.0
 
-python -m uvicorn backend.main:app --reload --port 8000 --host 0.0.0.0
-
-.venv\Scripts\activate
+#locate
 cd backend
+
+#launch backend
 python -m uvicorn main:app --reload --port 8000 --host 0.0.0.0
 
 use backend because thats the directory name
