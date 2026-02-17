@@ -65,7 +65,7 @@ class TradingAgent:
 
     def __init__(self):
         self.api_key = os.getenv("GEMINI_API_KEY", "")
-        self.model_name = "gemini-2.5-flash-preview-05-20"
+        self.model_name = "gemini-2.5-flash"
         self.client = None
         self.decision_history: list[dict] = []
 

@@ -35,8 +35,10 @@ cd backend
 #launch backend
 python -m uvicorn main:app --reload --port 8000 --host 0.0.0.0
 
-use backend because thats the directory name
+
 ```
+
+use backend because thats the directory name
 
 > You should see: Uvicorn running on http://0.0.0.0:8000
 
