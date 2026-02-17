@@ -46,6 +46,10 @@ use backend because thats the directory name
 Open a new terminal in frontend/ and run:
 
 ```bash
+#locate
+cd frontend_react
+
+#launch frontend
 npm run dev
 ```
 
