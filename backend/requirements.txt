@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+websockets
+MetaTrader5
+google-genai
+python-dotenv
+pydantic
+pandas
