@@ -1,3 +1,7 @@
+<img width="1364" height="688" alt="image" src="https://github.com/user-attachments/assets/5e7b3c0a-cb1c-4afa-be73-0f39fca61fb1" />
+
+
+
 ## Gemini 3 Flash AI Trading Platform - Walkthrough
 
 This guide explains how to run and use the autonomous AI trading platform powered by Gemini 3 Flash.
@@ -35,8 +39,10 @@ cd backend
 #launch backend
 python -m uvicorn main:app --reload --port 8000 --host 0.0.0.0
 
-use backend because thats the directory name
+
 ```
+
+use backend because thats the directory name
 
 > You should see: Uvicorn running on http://0.0.0.0:8000
 
